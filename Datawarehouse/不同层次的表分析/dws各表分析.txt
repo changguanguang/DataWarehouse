@@ -1,0 +1,31 @@
+1. 概述:
+	站在维度看事实,轻度聚合(每日的各个维度的数量统计),所以会有 <集合>类 数据
+2. 日期处理函数	
+	1) date_format
+	2) date_add
+	3) next_day
+		next_day('2020-06-14','MO')
+		date_add(next_day('2020-06-14','MO'),-7)
+		last_day('2020-06-14')
+	4) last_day
+3. 复杂数据类型定义
+	1) map结构
+		map<string,string>
+	2) array结构
+		array<string>
+	3) struct结构
+		struct<id:int,name:string,age:int>
+	4) struct和array嵌套
+		array<struct<id:int,name:string,age:int>>
+4. 
+	- 每日设备行为
+		- 聚合 -> join
+	- 每日会员行为
+		- 聚合 -> left join
+	- 每日商品行为
+		- 聚合 -> join(union all[只有当数据都是数字的时候,才能使用union,然后sum求合])
+	- 每日活动统计
+		- 表中有活动的 下单次数,支付次数字段,与dwd_fact_order_info相关
+		- 订单表由于按照create_time作为分区(所以在订单事实表的每天更新中,可能会更新前一天创建的订单,则在修改完之前的订单后需要使用动态分区将该数据放回到原分区中),所以需要得到前两天的数据.
+	- 每日地区统计
+		- 有 下单次数,下单金额,支付次数,支付金额字段,与dwd_fact_order_info相关

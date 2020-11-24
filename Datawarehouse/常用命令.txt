@@ -1,0 +1,22 @@
+================yarn& hadoop====================
+1. yarn application -list
+2. yarn application -kill $job_id
+3. load data inpath "$hdfs_path" into table "$table_name"
+4. presto命令行： ./prestocli --server hadoop102:8881 --catalog hive --schema default
+================kafka==================
+5. bin/kafka-server-start.sh config/server.properties &  后台启动kafka-server
+ "/opt/module/kafka/bin/kafka-server-start.sh  -daemon /opt/module/kafka/config/server.properties "
+6. bin/kafka-topics.sh --zookeeper 		hadoop102:2181 \
+	--create --replication-factor 3 --partitions 1 --topic first    ### 创建topic
+7. bin/kafka-console-producer.sh \ 
+--broker-list hadoop102:9092 --topic first   ### 测试生产数据
+8. bin/kafka-console-consumer.sh \ 
+--bootstrap-server hadoop102:9092 --from-beginning --topic first   ### 测试消费数据
+=================linux========================
+9.  ps -ef | grep file-flume-kafka | grep -v grep | gawk '{print \$2}' | xargs -n1 kill -9 
+  ## 反匹配 & 反杀
+ ==================flume======================
+10. bin/flume-ng agent --conf conf/ --name a1 --conf-file  /home/atguigu/calllog/flume2kafka.conf
+
+11. 
+ 

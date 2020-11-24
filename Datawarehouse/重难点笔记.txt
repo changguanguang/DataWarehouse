@@ -1,0 +1,40 @@
+1. 在 flume对接hdfs中，可能会导致小文件过多，怎么半？
+	-- 小文件在hdfs中的危害：
+		- 元数据的层面：
+			每一个小文件都有一份元数据，其中包括文件路径，文件名，所有者，所属者，创建事件等等，这些信息都保存在NameNode内存中，每个元数据需要150字节的存储空间，小文件过多，会占用NameNode大量内存，影响NameNode性能和使用寿命。
+		- 计算任务层面：
+			由于文件过小，会给每一个小文件开启一个Map任务进行计算，非常影响性能和使用寿命。
+	-- 小文件的解决办法：
+		三个参数
+		- hdfs.rollIntervel=36000  // 回滚间隔
+		- hdfs.rollSize=134217728（128M）     //  文件的回滚大小
+		- hdfs.rollCount=0    // 回滚次数
+		
+2. 在整个用户行为日志采集中，应先确保zookeeper启动，再启动kafka，以及确保kafka已经关闭再关闭zookeeper
+3. Hive 中的 Null 在底层是以“\N”来存储，而 MySQL 中的 Null 在底层就是 Null，为了
+保证数据两端的一致性。在导出数据时采用--input-null-string 和--input-null-non-string 两个参
+数。导入数据时采用--null-string 和--null-non-string。
+
+4. 配置hive元数据库
+	-- 安装mysql
+	-- 配置hive.site
+	-- 在MySQL中创建metastore
+	-- 初始化元数据库 
+		schematool -initSchema -dbType mysql -verbose
+5. 当多个job提交到spark中等待分配资源运行到那时候，会出现阻塞？
+	-- 原因：
+		一般所有job都会提交到default队列中，由于容量调度器并行度为1，导致后面提交的任务需要等待前面的任务执行结束。
+	-- 解决：
+		- 增大ApplicationMaster使用资源比例
+			① vim /opt/module/hadoop-3.1.3/etc/Hadoop/capacity-scheduler.xml
+			② <name>yarn.scheduler.capacity.maximum-am-resource-percent</name>
+				<value>0.5</value>
+				<description>
+					集群中用于运行应用程序 ApplicationMaster 的资源比例上限，
+					该参数通常用于限制处于活动状态的应用程序数目。该参数类型为浮点型，
+					默认是 0.1，表示 10%。所有队列的 ApplicationMaster 资源比例上限可通过参数
+					yarn.scheduler.capacity.maximum-am-resource-percent 设置，而单个队
+					列 可 通 过 参 数，yarn.scheduler.capacity.<queue-path>.maximum-am-resource-perce
+					nt 设置适合自己的值。</description>
+		- 增加队列，将任务提交到空闲队列
+			

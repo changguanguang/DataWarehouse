@@ -1,0 +1,131 @@
+1. hive使用MySQL作为中介元数据存储，真实数据存储在hdfs上，
+2. hive在创建表的时候，可以创建分区表，从而避免全表扫描，
+	在select * 的时候，查询结果会将dt作为一个额外字段展示
+	出来。（因为如果没有声明查询那个分区的时候，会将所有
+	分区的值都查出来，为了区分，所以会将分区作为一个字段展示出来）
+3. 在hive的查询中，如果查询的不是原始表，就必须给表起别名。、
+4. 炸裂函数以及自定义UDTF的使用：
+	-- 用法:
+		lateral view udtf(tableAlias) as columnAlias
+		
+		--explode的使用实例:
+			-- 创建本地数据movie.txt
+				《疑犯追踪》	悬疑,动作,科幻,剧情
+				《Lie to me》	悬疑,警匪,动作,心理,剧情
+				《战狼2》	战争,动作,灾难
+
+			-- 创建hive表并导入数据
+				create table movie_info(
+				movie string, 
+				category array<string>) 
+				row format delimited fields terminated by "\t"
+				collection items terminated by ",";
+
+				load data local inpath "/opt/module/datas/movie.txt" into table movie_info;
+
+			-- 按需求查询数据
+				select
+					movie,
+					category_name
+				from 
+					movie_info lateral view explode(category) table_tmp as category_name;
+					// 这里将movie_info炸裂后，形成一个临时表，去一个tableAlias
+		-- 自定义UDTF的使用:
+			-- 作用:解析json字符串数组,将每个json字符串解析出来,列炸为行
+			-- 使用步骤:
+				① 继承 GenericUDTF
+				② 实现输入参数合法性检查
+				③ 实现process细节
+				
+			
+
+5. 在使用hive on spark中，hive——client会持续在default队列中占用资源，因此
+	导致其他任务无法执行，阻塞。
+	解决办法：
+		1. 退出hive_client
+		2. 在hadoop配置文件中增大AM的最大占用率
+		3. 增加队列，将其他的任务提交到其他队列执行，避免抢夺资源
+6. 字段的横向连接：
+	1. 使用join，注意表之间的大小关系与重叠关系，left/right/full join
+	2. 使用union all，纵向拼接实现横向拼接
+		这里只有在当所有要求字段都是数字的时候，可以使用，
+			将其他的字段都设置为0，union all->group by -> sum(column)
+			
+7. hive中的系统函数：
+	1. if()
+	2. nvl(a,b),在join中会经常使用,当a为null时，使用b
+	3. collect_set()
+	4. date_format(date,"yyyy-MM-dd")
+	5. date_add(date,num)
+	6. sum() 聚合操作
+	7. next_day(“2020-06-14”，“MO”) 取下一个周一，周二什么的
+	8. last_day(“2020-06-14”) 取当月的最后一天日期
+	9. coalesce（a,b,c）当a为null时，使用b，当b为null的时候，使用c	
+			-- nvl的增强版 上面相当于nvl（nvl（a,b）,c）
+	10. array_contains(set，“stirng”) 判断数组中是否包含某个字符串
+			通常与 collect_set()一起搭配使用
+	11. unix
+	12. get_json_object("JsonString",$[0].age) //可以解析json字符串，以及json数组
+	13. concat()
+	14. concat_ws()
+	15. collect_set() 聚合操作,一般搭配group by使用
+	16. str_to_map(VARCHAR text, VARCHAR listDelimiter, VARCHAR keyValueDelimiter)
+		实例:str_to_map('1001=2020-06-14,1002=2020-06-14', ',' , '=')
+		输出 :{"1001":"2020-06-14","1002":"2020-06-14"}
+	17. unix_timestamp(time) unix时间戳
+	
+8. 在执行sql的时候出现莫名其妙的错误，很多情况下都是格式问题
+	检查有无错误回车换行，导致分割一个完整字符串。
+
+9. 在sql中，join和in 在一些功能上相通，可以达到类似的效果，
+	join：将指定字段进行连接匹配，这其中也有用到in
+	in：可以指明某个字段是否在这个集合中。
+10. 去重：
+	1. instinct
+	2. group by
+	
+11. 在求连续3天都登录的用户数的时候，
+		-按id分区（partition by）
+		-按时间dt排序（order by）
+		-使用rank（）函数得到排序字段rk
+		-使用date_sub(dt,rk) 等差数列进行相减，得到相同的值
+		-使用group by & having进行分组计数，过滤出count（*） >= 3的id
+	例子：
+	 -- 求出最近7天内连续3天都登录的用户数量
+	 
+		insert into table ads_continuity_wk_count
+		select '2020-06-16',
+			   concat(date_add('2020-06-16', -6), '_', '2020-06-16'),
+			   count(*)
+		from (
+				 select t.mid_id,
+						date_sub(t.dt, t.rk) dif
+				 from (
+						  select a.mid_id,
+								 dt,
+								 rank() over (partition by mid_id order by dt) rk
+						  from dws_uv_detail_daycount a
+						  where dt > date_add('2020-06-16', -7)
+							and dt <= '2020-06-16'
+					  ) t
+			 ) q
+		group by q.mid_id, q.dif
+		having count(*) >= 3;
+		
+12. 日期处理函数	
+	1) date_format
+	2) date_add
+	3) next_day
+		next_day('2020-06-14','MO')
+		date_add(next_day('2020-06-14','MO'),-7)
+		last_day('2020-06-14')
+	4) last_day
+13. 复杂数据类型定义
+	1) map结构
+		map<string,string>
+	2) array结构
+		array<string>
+	3) struct结构
+		struct<id:int,name:string,age:int>
+	4) struct和array嵌套
+		array<struct<id:int,name:string,age:int>>

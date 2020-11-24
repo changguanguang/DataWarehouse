@@ -1,0 +1,104 @@
+1. flume基本构成
+	-- source
+		- Tairsource
+		- hdfssource
+		- kafkaSource
+	-- channel
+		- memoryChannel
+		- fileChannel
+		- kafkaChannel
+	-- sink
+		- hdfssink
+		- kafkasink
+	
+2. flume发送的消息的基本结构
+	-- Event的构成：
+		[HashMap<key,value>  headers ， bytes[] body]
+		
+2. flume-kafka 如何将特定的数据调整进入特定的分区（拦截器？）
+	-- 在source与channel之间设置拦截器，拦截每一个Event，然后对每一个Event进行处理
+	-- 获取body中的数据，根据body中的数据指定header，就可以进入到不同的分区
+	-- 实例： 根据body中的数据获取时间戳，放到Header中去
+	public Event intercept(Event event) {
+        Map<String, String> headers = event.getHeaders();
+        String log = new String(event.getBody(), StandardCharsets.UTF_8);
+
+        // 将json转化为json对象，找到对象中的属性ts值
+		// 通过json框架解析字符串为 json对象
+        JSONObject jsonObject = JSONObject.parseObject(log);
+        String ts = jsonObject.getString("ts");
+        headers.put("timestamp",ts);
+        return event;
+    }
+
+4. flume配置参数的动态指定（%{}？？？）
+
+5. flume中的事务：
+	- put事务：
+		从 source 到 channel，只有数据从source写入到channel后，才会认为事务成功
+			doput -> putList -> doCommit (doRollBack事务回滚) 
+			
+	
+	- take事务：
+		从 channel 到 sink ，只有数据从channel写入到sink后，才会认为事务成功
+			doTake -> takeList -> doCommit (doRollBack事务回滚)
+		事务一旦被提交，该Channel从自己的内部缓冲区删除事件。
+
+
+
+
+
+
+
+1. 消息中间件
+	以前：在producer与consumer直接对接，当其中之一宕机，直接导致系统瘫痪
+	现在：在之间加入broker，实现producer与consumer解耦，从而当producer生产数据，consumer消费数据，互不干扰
+2. kafka基本架构与message结构
+	message：kv键值对。
+3. kafka offset存储
+	a.在zookeeper中的 /consumers/consumer group/offset中存储
+		注意：这里以消费者组group为单位进行存储，为什么不以消费者为单位进行存储？
+			答：一个消费者组对应着个一个topic，一个消费者对应着一个partition。
+				当一个消费者挂掉之后，如果以消费者为单位存储，会导致offset直接丢失，
+				然鹅以消费者组为单位，对所有分区进行rebalance，就不会丢失数据。
+	b.在本地的$KAFKA_HOME/logs下存储着offset文件
+4. kafka 高低阶消费者
+	高阶消费者：先消费，再上传offset，当消费完突然挂掉之后，就会导致offset没有同步，导致下次消费数据重复。
+	低阶消费者：先上传offset，再消费，当正好挂掉之后，就会导致offset上传，但是没有消费，下次消费数据丢失。
+5. kafka分区分配原则
+	？？？？
+	kafka分区的好处：
+		1. 实现高并发，高吞吐
+		2. 实现负载均衡
+		3. 方便集群扩展
+6. kafka 实现高吞吐
+	通过分区实现高吞吐。
+	以前只有一个分区的时候，一个分区只能被一个消费者消费（分区文件锁），然而一个消费者的消费能力有限，导致数据吞吐量小，
+	现在：实现一个主题对应多个分区，多个分区可以被多个消费者消费，达到消费能力倍数增长。
+7. kafka数据可靠性保证
+	三个阶段：
+	1.prodeucer->broker
+		producer有0，1，-1模式，
+			0：不等待broker中leader的写入完成通知，直接开始下一步写。（很可能丢失数据，但是性能高）
+			1：等待broker，leader的通知后，才进行下一步。（一定程度上避免了丢失数据）
+			-1：等待leader以及其他follower的写入完成通知，才进行下一步。（不会丢失数据，速度慢）
+8. kafka与spark streaming
+	- 将kafka中的数据，
+	
+9. kafka创建topic时，是如何将不同的分区放到不同的broker中的？（轮询）
+	o	副本因子不能大于 Broker 的个数（每个broker中最多放置一个partition）；
+	o	第一个分区（编号为0）的第一个副本放置位置是随机从 brokerList 选择的；
+	o	其他分区的第一个副本放置位置相对于第0个分区依次往后移。也就是如果我们有5个 Broker，5个分区，假设第一个分区放在第四个 Broker 上，那么第二个分区将会放在第五个 Broker 上；第三个分区将会放在第一个 Broker 上；第四个分区将会放在第二个 Broker 上，依次类推；
+	o	剩余的副本相对于第一个副本放置位置其实是由 nextReplicaShift 决定的，而这个数也是随机产生的
+10. producer不再消费者中注册，但是consumer在在消费者注册，为什么？
+	producer生产者向broker中生产数据，producer宕机后，并不会影响kafka的正常运转，以及再次上线后，可以无影响的继续生产数据。
+	但是consumer从kafka消费数据，如果 consumer宕机，没有保存数据（比如自己消费到哪里了，哪些数据消费了，哪些数据没有被消费等等），再次上线就会丢失数据，从而会造成数据丢失或者重复，所以使用zookeeper检测consumer，以及记录元数据，offset等等，不过在zookeeper中，对consumer是按照group进行记录offset的，如果删除一个consumer，新添加一个consumer，不会造成影响。
+	- 这里消费者组策略，在一个consumer宕机后，其他消费者会进行自动负载均衡读取之前consumer的分区，不会造成数据丢失，但是可能会造成数据重复，因为offset的记录是每隔一分钟进行记录一下
+	
+	
+	
+	
+1. hive sql编写 （牛客网）
+2. hive优化
+3. 数仓建模（拉链表，动态分区，维度建模，全量表，增量表，增量以及变化表）
+4. ods(原始数据层，雪花模型) -> dwd（维度退化，etl，脱敏，归一化，星型模型） -> dws（轻量聚合,每天的统计） -> dwt（进一步聚合,起始->结束 + 累积） -> ads(业务统计)

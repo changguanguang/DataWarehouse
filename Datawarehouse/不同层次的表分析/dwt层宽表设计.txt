@@ -1,0 +1,18 @@
+1. 
+dwt: 在各维度(主题)上的 进一步聚合,累积时间(7天或一个月)下的度量值以及开头与结尾
+	-- 宽表：
+		表有高表和宽表，在mysql中，按行存储数据，尽量设计为高表，可以加快效率，但是在olap中，按照列式存储，宽表可以发挥很大的作用。
+	-- 宽表字段怎么来的？
+		维度关联的事实表度量值+<开头、结尾>+累积+累积一个时间段。
+	
+2. 
+	- 设备主题宽表
+		- old full outer join new
+	- 会员主题宽表
+		- old full outer join new
+	- 商品主题宽表
+		- old full outer join new
+	- 活动主题宽表
+		- old full outer join new
+	- 地区主题宽表
+		- old full outer join new
